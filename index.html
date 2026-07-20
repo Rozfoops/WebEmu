@@ -82,7 +82,20 @@
     width: 100%;
     height: 100%;
   }
+  
+  #game canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
 
+    overscroll-behavior: none;
+    touch-action: none;
+    will-change: transform;
+    transform: translateZ(0);
+    
+    width: 100%;
+    height: 100%;
+  }
+  
   #backBtn {
     position: fixed;
     top: 8px;
