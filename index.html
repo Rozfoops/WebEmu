@@ -124,13 +124,20 @@
     romInput.click();
   });
 
-  romInput.addEventListener('change', function () {
-    var file = romInput.files && romInput.files[0];
-    if (!file) return;
-    errorEl.textContent = '';
-    fileNameEl.textContent = file.name;
-    startEmulator(file.name, URL.createObjectURL(file));
-  });
+  //romInput.addEventListener('change', function () {
+  //  var file = romInput.files && romInput.files[0];
+  //  if (!file) return;
+  //  errorEl.textContent = '';
+  //  fileNameEl.textContent = file.name;
+  //  startEmulator(file.name, URL.createObjectURL(file));
+  //});
+
+  window.addEventListener("load", function () {
+    startEmulator(
+        "Pokemon Emerald",
+        "./Pokemon FireRed.gba"
+    );
+});
 
   backBtn.addEventListener('click', function () {
     location.reload();
