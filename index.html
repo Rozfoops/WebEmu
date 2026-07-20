@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>WebEmu</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    color: #eee;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #picker {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  #picker h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px 0;
+  }
+
+  #picker p {
+    font-size: 0.9rem;
+    color: #999;
+    margin: 0 0 12px 0;
+    max-width: 320px;
+  }
+
+  #romInput {
+    display: none;
+  }
+
+  .pick-btn {
+    font-size: 1.1rem;
+    padding: 14px 28px;
+    border-radius: 12px;
+    border: none;
+    background: #3b82f6;
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .pick-btn:active {
+    background: #2563eb;
+  }
+
+  #fileName {
+    font-size: 0.85rem;
+    color: #6ee7b7;
+    min-height: 1.2em;
+  }
+
+  #error {
+    font-size: 0.85rem;
+    color: #f87171;
+    min-height: 1.2em;
+    max-width: 320px;
+  }
+
+  #game {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  #backBtn {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 10000;
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: rgba(0,0,0,0.6);
+    color: #ccc;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="picker">
+  <h1>WebEmu</h1>
+  <p>Pick a GBA ROM from this device. Nothing is uploaded anywhere — it loads straight into the emulator, locally.</p>
+  <button class="pick-btn" id="pickBtn">Choose ROM File</button>
+  <input type="file" id="romInput" accept=".gba,.zip">
+  <div id="fileName"></div>
+  <div id="error"></div>
+</div>
+
+<button id="backBtn">&larr; Choose different ROM</button>
+<div id="game"></div>
+
+<script>
+  var pickBtn = document.getElementById('pickBtn');
+  var romInput = document.getElementById('romInput');
+  var fileNameEl = document.getElementById('fileName');
+  var errorEl = document.getElementById('error');
+  var pickerEl = document.getElementById('picker');
+  var backBtn = document.getElementById('backBtn');
+
+  pickBtn.addEventListener('click', function () {
+    romInput.click();
+  });
+
+  romInput.addEventListener('change', function () {
+    var file = romInput.files && romInput.files[0];
+    if (!file) return;
+    errorEl.textContent = '';
+    fileNameEl.textContent = file.name;
+    startEmulator(file.name, URL.createObjectURL(file));
+  });
+
+  backBtn.addEventListener('click', function () {
+    location.reload();
+  });
+
+  function startEmulator(fileName, blobUrl) {
+    // EmulatorJS config -- must be set before loader.js runs.
+    window.EJS_player = '#game';
+    window.EJS_core = 'gba';
+    window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+    window.EJS_gameName = fileName.replace(/\.[^/.]+$/, '');
+    window.EJS_gameUrl = blobUrl;
+    window.EJS_startOnLoaded = true;
+
+    // The CDN build's auto-detect (navigator.maxTouchPoints / any-pointer:coarse)
+    // only shows the virtual gamepad on real touch hardware, so it won't appear
+    // during desktop testing. Force it on directly once the core starts, using
+    // the same activation this build applies internally on touch devices.
+    //--window.EJS_onGameStart = function () {
+    //  var e = window.EJS_emulator;
+    //  if (!e || !e.virtualGamepad) return;
+    //  e.virtualGamepad.classList.add('ejs-vgamepad-active');
+    //  e.canvas.classList.add('ejs-canvas-no-pointer');
+      // Something in this build's settings-sync re-hides the pad shortly after
+      // start (its default "virtual-gamepad" preference is "disabled" whenever
+      // isMobile/hasTouchScreen read false, as they do on a mouse/keyboard
+    //  // laptop). Pin the toggle so nothing can turn it back off.
+    //  var nativeToggle = e.toggleVirtualGamepad.bind(e);
+    //  e.toggleVirtualGamepad = function () { nativeToggle(true); };
+    //  e.toggleVirtualGamepad(true);
+    //};
+    window.EJS_onGameStart = function () {
+    const e = window.EJS_emulator;
+
+    e.touch = true;
+    e.isMobile = true;
+    e.hasTouchScreen = true;
+
+    e.virtualGamepad.style.display = "";
+
+    e.toggleVirtualGamepad(true);
+    };
+
+
+    // Virtual gamepad overlay shows automatically on touch-detected devices.
+    window.EJS_Buttons = {
+      playPause: true,
+      restart: true,
+      mute: true,
+      settings: true,
+      fullscreen: true,
+      saveState: true,
+      loadState: true,
+      screenRecord: false,
+      gamepad: true,
+      cheat: false,
+      volume: true,
+      saveSavFiles: true,
+      loadSavFiles: true,
+      quickSave: true,
+      quickLoad: true,
+      screenshot: false,
+      cacheManager: true,
+      exitEmulation: false,
+    };
+
+    pickerEl.style.display = 'none';
+    backBtn.style.display = 'block';
+
+    var script = document.createElement('script');
+    script.src = window.EJS_pathtodata + 'loader.js';
+    script.onerror = function () {
+      errorEl.textContent = 'Failed to load the emulator core. Check your internet connection.';
+      backBtn.style.display = 'none';
+      pickerEl.style.display = 'flex';
+    };
+    document.body.appendChild(script);
+  }
+</script>
+
+</body>
+</html>
