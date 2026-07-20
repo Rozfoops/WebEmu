@@ -184,24 +184,28 @@
 
     // Virtual gamepad overlay shows automatically on touch-detected devices.
     window.EJS_Buttons = {
-      playPause: true,
-      restart: true,
-      mute: true,
-      settings: true,
-      fullscreen: true,
-      saveState: true,
-      loadState: true,
-      screenRecord: false,
-      gamepad: true,
-      cheat: false,
-      volume: true,
-      saveSavFiles: true,
-      loadSavFiles: true,
-      quickSave: true,
-      quickLoad: true,
-      screenshot: false,
-      cacheManager: true,
-      exitEmulation: false,
+      playPause: false,
+    restart: true,
+    mute: true,
+    settings: true,
+    fullscreen: true,
+
+    saveState: true,
+    loadState: true,
+
+    quickSave: true,
+    quickLoad: true,
+
+    gamepad: true,
+
+    cheat: false,
+    screenRecord: false,
+    screenshot: false,
+    cacheManager: false,
+    volume: false,
+    saveSavFiles: false,
+    loadSavFiles: false,
+    exitEmulation: false
     };
 
     pickerEl.style.display = 'none';
