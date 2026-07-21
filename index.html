@@ -134,10 +134,10 @@
 
   window.addEventListener("load", function () {
     startEmulator(
-        "Pokemon Emerald",
+        "Pokemon FireRed",
         "./Pokemon FireRed.gba"
     );
-});
+  });
 
   backBtn.addEventListener('click', function () {
     location.reload();
@@ -170,42 +170,42 @@
     //  e.toggleVirtualGamepad(true);
     //};
     window.EJS_onGameStart = function () {
-    const e = window.EJS_emulator;
+      const e = window.EJS_emulator;
+      if (!e || !e.virtualGamepad) return;
 
-    e.touch = true;
-    e.isMobile = true;
-    e.hasTouchScreen = true;
-
-    e.virtualGamepad.style.display = "";
-
-    e.toggleVirtualGamepad(true);
+      e.touch = true;
+      e.isMobile = true;
+      e.hasTouchScreen = true;
+  
+      e.virtualGamepad.style.display = "";
+      e.toggleVirtualGamepad(true);
     };
 
 
     // Virtual gamepad overlay shows automatically on touch-detected devices.
     window.EJS_Buttons = {
       playPause: false,
-    restart: true,
-    mute: true,
-    settings: true,
-    fullscreen: true,
-
-    saveState: true,
-    loadState: true,
-
-    quickSave: true,
-    quickLoad: true,
-
-    gamepad: true,
-
-    cheat: false,
-    screenRecord: false,
-    screenshot: false,
-    cacheManager: false,
-    volume: false,
-    saveSavFiles: false,
-    loadSavFiles: false,
-    exitEmulation: false
+      restart: true,
+      mute: true,
+      settings: true,
+      fullscreen: true,
+  
+      saveState: true,
+      loadState: true,
+  
+      quickSave: true,
+      quickLoad: true,
+  
+      gamepad: true,
+  
+      cheat: false,
+      screenRecord: false,
+      screenshot: false,
+      cacheManager: false,
+      volume: false,
+      saveSavFiles: false,
+      loadSavFiles: false,
+      exitEmulation: false
     };
 
     pickerEl.style.display = 'none';
