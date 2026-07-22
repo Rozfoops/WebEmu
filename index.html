@@ -152,6 +152,19 @@
     window.EJS_gameUrl = blobUrl;
     window.EJS_startOnLoaded = true;
 
+    // Flush SRAM every 30 seconds
+    window.EJS_fixedSaveInterval = 30000;
+    
+    // Called when EmulatorJS finishes mounting its save database
+    window.EJS_onSaveDatabaseLoaded = function () {
+        console.log("✅ Save database mounted");
+    };
+    
+    // Called whenever EmulatorJS writes save files
+    window.EJS_onSaveSaveFiles = function () {
+        console.log("💾 Save files updated");
+    };
+
     // The CDN build's auto-detect (navigator.maxTouchPoints / any-pointer:coarse)
     // only shows the virtual gamepad on real touch hardware, so it won't appear
     // during desktop testing. Force it on directly once the core starts, using
