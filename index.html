@@ -183,6 +183,8 @@
     //  e.toggleVirtualGamepad(true);
     //};
     window.EJS_onGameStart = function () {
+      console.log("🎮 Game started");
+      
       const e = window.EJS_emulator;
       if (!e || !e.virtualGamepad) return;
 
