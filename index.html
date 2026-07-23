@@ -143,6 +143,173 @@
     location.reload();
   });
 
+  // ---------------------------------------------------------------------
+  // Fail-safe autosave (separate IndexedDB store, two-tier: current/previous)
+  // This is entirely independent of EmulatorJS's own save-state DB, so the
+  // manual Save State / Load State / Quick Save / Quick Load buttons above
+  // are untouched and unaffected by any of this.
+  // ---------------------------------------------------------------------
+  var AUTOSAVE_DB_NAME = 'webemu-autosave';
+  var AUTOSAVE_STORE = 'states';
+  var AUTOSAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  var AUTOSAVE_MIN_BYTES = 1024; // reject anything implausibly small/truncated
+  var autosaveTimer = null;
+
+  function openAutosaveDB() {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open(AUTOSAVE_DB_NAME, 1);
+      req.onupgradeneeded = function () {
+        req.result.createObjectStore(AUTOSAVE_STORE);
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+
+  function idbGet(db, key) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(AUTOSAVE_STORE, 'readonly');
+      var req = tx.objectStore(AUTOSAVE_STORE).get(key);
+      req.onsuccess = function () { resolve(req.result || null); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+
+  // Writes all entries in a single transaction, so the "demote old current
+  // to previous" + "write new current" swap is all-or-nothing.
+  function idbPutMany(db, entries) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(AUTOSAVE_STORE, 'readwrite');
+      entries.forEach(function (entry) {
+        tx.objectStore(AUTOSAVE_STORE).put(entry[1], entry[0]);
+      });
+      tx.oncomplete = function () { resolve(); };
+      tx.onerror = function () { reject(tx.error); };
+    });
+  }
+
+  async function sha256Hex(bytes) {
+    var digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest)).map(function (b) {
+      return b.toString(16).padStart(2, '0');
+    }).join('');
+  }
+
+  // Confirms an entry is structurally sound before it's ever promoted or
+  // restored: right shape, plausible size, and (if present) hash-checked
+  // against bit-rot in storage, not just a bad capture at save time.
+  async function verifyEntry(entry) {
+    if (!entry || !entry.bytes || !entry.bytes.length) return false;
+    if (entry.bytes.length < AUTOSAVE_MIN_BYTES) return false;
+    if (entry.hash) {
+      var check = await sha256Hex(entry.bytes);
+      if (check !== entry.hash) return false;
+    }
+    return true;
+  }
+
+  async function captureAutosave(gameName) {
+    var e = window.EJS_emulator;
+    if (!e || !e.gameManager || typeof e.gameManager.getState !== 'function') return;
+
+    var stateBytes;
+    try {
+      stateBytes = e.gameManager.getState();
+    } catch (err) {
+      console.warn('[autosave] getState() threw, skipping this cycle:', err);
+      return;
+    }
+
+    if (!stateBytes || !stateBytes.length || stateBytes.length < AUTOSAVE_MIN_BYTES) {
+      console.warn('[autosave] captured state looked invalid, skipping this cycle');
+      return;
+    }
+
+    // Copy out of the emulator's heap-backed buffer before it can be reused.
+    var snapshot = new Uint8Array(stateBytes);
+    var hash = await sha256Hex(snapshot);
+    var key = 'autosave:' + gameName;
+    var prevKey = key + ':previous';
+
+    try {
+      var db = await openAutosaveDB();
+      var currentEntry = await idbGet(db, key);
+
+      var writes = [];
+      if (currentEntry) {
+        writes.push([prevKey, currentEntry]); // demote last good save
+      }
+      writes.push([key, { bytes: snapshot, hash: hash, savedAt: Date.now() }]);
+
+      await idbPutMany(db, writes);
+      db.close();
+      console.log('[autosave] saved (' + snapshot.length + ' bytes)');
+    } catch (err) {
+      console.warn('[autosave] failed to write to IndexedDB:', err);
+    }
+  }
+
+  async function restoreAutosave(gameName) {
+    var e = window.EJS_emulator;
+    if (!e || !e.gameManager || typeof e.gameManager.loadState !== 'function') return;
+
+    var db;
+    try {
+      db = await openAutosaveDB();
+    } catch (err) {
+      console.warn('[autosave] could not open DB for restore:', err);
+      return;
+    }
+
+    var key = 'autosave:' + gameName;
+    var prevKey = key + ':previous';
+
+    var entry = await idbGet(db, key).catch(function () { return null; });
+    var usedTier = 'current';
+
+    if (!(await verifyEntry(entry))) {
+      console.warn('[autosave] current tier missing/corrupt, falling back to previous tier');
+      entry = await idbGet(db, prevKey).catch(function () { return null; });
+      usedTier = 'previous';
+    }
+
+    db.close();
+
+    if (!(await verifyEntry(entry))) {
+      console.log('[autosave] no valid autosave found, starting fresh');
+      return;
+    }
+
+    try {
+      e.gameManager.loadState(entry.bytes);
+      console.log('[autosave] restored from ' + usedTier + ' tier (' + entry.bytes.length + ' bytes)');
+    } catch (err) {
+      console.warn('[autosave] loadState() threw during restore:', err);
+    }
+  }
+
+  function startAutosaveLoop(gameName) {
+    if (autosaveTimer) clearInterval(autosaveTimer);
+    autosaveTimer = setInterval(function () {
+      captureAutosave(gameName);
+    }, AUTOSAVE_INTERVAL_MS);
+
+    // A fixed interval alone can miss the last stretch of play if the tab is
+    // just closed outright, so also catch it going into the background.
+    // (Not relying on beforeunload/unload -- those fire unreliably for async
+    // work, especially on embedded browsers like the Portal's.)
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') {
+        captureAutosave(gameName);
+      }
+    });
+
+    // Ask the browser not to evict this data under storage pressure.
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist();
+    }
+  }
+
   function startEmulator(fileName, blobUrl) {
     // EmulatorJS config -- must be set before loader.js runs.
     window.EJS_player = '#game';
@@ -186,14 +353,21 @@
       console.log("🎮 Game started");
       
       const e = window.EJS_emulator;
-      if (!e || !e.virtualGamepad) return;
+      if (e && e.virtualGamepad) {
+        e.touch = true;
+        e.isMobile = true;
+        e.hasTouchScreen = true;
 
-      e.touch = true;
-      e.isMobile = true;
-      e.hasTouchScreen = true;
-  
-      e.virtualGamepad.style.display = "";
-      e.toggleVirtualGamepad(true);
+        e.virtualGamepad.style.display = "";
+        e.toggleVirtualGamepad(true);
+      }
+
+      // Restore the last good autosave (if any), then start the 5-minute
+      // autosave loop. This runs after the virtual gamepad setup above but
+      // doesn't depend on it.
+      restoreAutosave(window.EJS_gameName).then(function () {
+        startAutosaveLoop(window.EJS_gameName);
+      });
     };
 
 
